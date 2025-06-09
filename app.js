@@ -210,6 +210,7 @@ async function searchPrincipal() {
   }
   principalGrid.innerHTML = "<p style='grid-column:1/-1;'>Cargando...</p>";
   try {
+    // *** ZONA EDITABLE: URL de búsqueda para la sección Principal ***
     const url = `https://delirius-apiofc.vercel.app/search/ytsearch?q=${encodeURIComponent(query)}`;
     const res = await fetchWithRetry(url);
     const data = await res.json();
@@ -218,6 +219,7 @@ async function searchPrincipal() {
   } catch (err) {
     console.error(err);
     principalGrid.innerHTML = "<p style='grid-column:1/-1;'>Error en la búsqueda.</p>";
+    // *** ZONA EDITABLE: Mensaje de error para búsqueda fallida ***
     showToast("Error al buscar canciones");
   }
 }
@@ -288,6 +290,7 @@ function displayPrincipalResults(results) {
           const progressContainer = card.querySelector(".download-progress");
           progressContainer.style.display = "block";
           const progressBar = progressContainer.querySelector("progress");
+          // *** ZONA EDITABLE: URL de la API para descargas offline ***
           const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${videoId}`;
           const resApi = await fetchWithRetryDownload(apiUrl, abortController);
           const jsonData = await resApi.json();
@@ -315,6 +318,7 @@ function displayPrincipalResults(results) {
             progressContainer.style.display = "none";
           } else {
             console.error(err);
+            // *** ZONA EDITABLE: Mensaje de error para descarga fallida ***
             showToast("Error al descargar la canción");
             downloadBtn.innerHTML = "Descargar offline";
             downloadBtn.style.display = "inline-block";
@@ -361,6 +365,7 @@ async function searchBuscar() {
   }
   buscarList.innerHTML = "<p>Cargando...</p>";
   try {
+    // *** ZONA EDITABLE: URL de búsqueda para la sección Buscar ***
     const url = `https://delirius-apiofc.vercel.app/search/searchtrack?q=${encodeURIComponent(query)}`;
     const res = await fetchWithRetry(url);
     const data = await res.json();
@@ -376,6 +381,7 @@ async function searchBuscar() {
   } catch (err) {
     console.error(err);
     buscarList.innerHTML = "<p>Error en la búsqueda.</p>";
+    // *** ZONA EDITABLE: Mensaje de error para búsqueda fallida ***
     showToast("Error al buscar canciones");
   }
 }
@@ -447,6 +453,7 @@ function displayBuscarResults(results) {
           const progressContainer = div.querySelector(".download-progress");
           progressContainer.style.display = "block";
           const progressBar = progressContainer.querySelector("progress");
+          // *** ZONA EDITABLE: URL de la API para descargas offline ***
           const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${videoId}`;
           const resApi = await fetchWithRetryDownload(apiUrl, abortController);
           const jsonData = await resApi.json();
@@ -474,6 +481,7 @@ function displayBuscarResults(results) {
             progressContainer.style.display = "none";
           } else {
             console.error(err);
+            // *** ZONA EDITABLE: Mensaje de error para descarga fallida ***
             showToast("Error al descargar la canción");
             downloadBtn.innerHTML = "Descargar offline";
             downloadBtn.style.display = "inline-block";
@@ -617,21 +625,25 @@ async function loadAndPlayCurrent() {
   }
   document.getElementById("player-thumb-spinner").style.display = "block";
   try {
-    const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${track.videoId}`;
-    const resApi = await fetchWithRetry(apiUrl);
-    const jsonData = await resApi.json();
-    if (jsonData.status !== 200 || !jsonData.data || jsonData.data.length === 0) {
-      throw new Error("Error obteniendo enlace de streaming");
-    }
-    let bestQualityObj = jsonData.data.reduce((prev, curr) => {
-      return parseInt(curr.quality) > parseInt(prev.quality) ? curr : prev;
+    // *** ZONA EDITABLE: URL de la API para reproducción en línea ***
+    const apiUrl = `https://ytdlpyton.nvlgroup.my.id/download/audio?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3D${track.videoId}&mode=Url`;
+    const resApi = await fetchWithRetry(apiUrl, {
+      headers: { 'accept': 'application/json' }
     });
-    track.audioUrl = bestQualityObj.downloadUrl;
+    const jsonData = await resApi.json();
+    // *** ZONA EDITABLE: Validación de la respuesta de la API de reproducción ***
+    if (jsonData.status !== "Success" || !jsonData.download_url) {
+      throw new Error("Error obteniendo enlace de streaming: " + (jsonData.message || "Respuesta inválida"));
+    }
+    track.audioUrl = jsonData.download_url;
+    track.thumbnail = jsonData.thumbnail || track.thumbnail; // Actualizar miniatura si la API lo proporciona
+    track.title = jsonData.title || track.title; // Actualizar título si la API lo proporciona
     document.getElementById("player-thumb-spinner").style.display = "none";
     startPlayback();
   } catch (err) {
     document.getElementById("player-thumb-spinner").style.display = "none";
     console.error("Error cargando stream:", err);
+    // *** ZONA EDITABLE: Mensaje de error para reproducción fallida ***
     showToast("Error reproduciendo la canción, saltando a la siguiente");
     if (currentIndex < playQueue.length - 1) {
       currentIndex++;
@@ -653,6 +665,7 @@ function startPlayback() {
   audio.load();
   audio.play().catch(err => {
     console.error("Error al reproducir:", err);
+    // *** ZONA EDITABLE: Mensaje de error para fallo al reproducir ***
     showToast("Error reproduciendo la canción, saltando a la siguiente");
     if (currentIndex < playQueue.length - 1) {
       currentIndex++;
@@ -843,6 +856,7 @@ function loadOfflineSongs(filterQuery = "") {
   };
   req.onerror = () => {
     offlineContainer.innerHTML = "<p>Error al cargar canciones.</p>";
+    // *** ZONA EDITABLE: Mensaje de error para carga de biblioteca fallida ***
     showToast("Error al cargar canciones descargadas");
   };
 }
@@ -856,6 +870,7 @@ function saveSongToDB(songData) {
   };
   tx.onerror = () => {
     console.error("Error guardando la canción en IndexedDB.");
+    // *** ZONA EDITABLE: Mensaje de error para fallo al guardar en DB ***
     showToast("Error al guardar la canción");
   };
 }
