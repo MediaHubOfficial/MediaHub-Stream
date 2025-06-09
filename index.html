@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MediaHub Music Player</title>
+
+  <!-- Vincular el manifest -->
+  <link rel="manifest" href="manifest.json"/>
+
+  <style>
+    /* --- RESET --- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212; /* Fondo oscuro corregido */
+      color: #fff; /* Texto claro */
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 130px; /* espacio para reproductor + bottom nav */
+    }
+    /* --- TOAST (mensaje flotante) --- */
+    .toast-container {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .toast {
+      background-color: rgba(0,0,0,0.8);
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-size: 0.85em;
+      opacity: 1;
+      animation: fadeOut 3s forwards;
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    /* --- SECCIONES --- */
+    .section { display: none; padding: 15px; }
+    .section.active { display: block; }
+    /* --- BARRA DE NAVEGACIÓN INFERIOR --- */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 60px;
+      background-color: #181818;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      border-top: 1px solid #333;
+      z-index: 9999;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 0.75em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      padding: 5px;
+    }
+    .nav-btn img {
+      width: 24px; height: 24px;
+      margin-bottom: 2px;
+      filter: invert(100%);
+    }
+    .nav-btn.active { color: #ff0000; }
+    /* --- BARRAS DE BÚSQUEDA --- */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .search-bar input {
+      flex: 1;
+      padding: 8px;
+      border-radius: 4px;
+      border: none;
+      font-size: 0.9em;
+      margin-right: 8px;
+    }
+    .search-bar button {
+      background-color: #ff0000;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+      color: #fff;
+    }
+    /* --- PRINCIPAL --- */
+    #principal h2 { margin-bottom: 10px; font-size: 1.1em; }
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .grid-card {
+      background-color: #1f1f1f;
+      border-radius: 6px;
+      overflow: hidden;
+      text-align: left;
+      padding-bottom: 8px;
+      position: relative;
+    }
+    .grid-card img { width: 100%; height: 80px; object-fit: cover; }
+    .grid-info { padding: 6px; }
+    .grid-info h3 { font-size: 0.8em; margin-bottom: 4px; max-height: 2.2em; overflow: hidden; }
+    .grid-info p { font-size: 0.65em; color: #aaa; margin-bottom: 6px; }
+    .grid-info .buttons-container { display: flex; gap: 6px; }
+    .grid-info button {
+      background-color: #ff0000;
+      border: none;
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7em;
+      color: #fff;
+      flex-shrink: 0;
+      position: relative;
+    }
+    /* --- BUSCAR --- */
+    #buscar h2 { margin-bottom: 10px; font-size: 1.1em; }
+    .search-list { display: flex; flex-direction: column; gap: 10px; }
+    .search-item {
+      background-color: #1f1f1f;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      gap: 10px;
+      position: relative;
+    }
+    .search-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; }
+    .search-info { flex: 1; }
+    .search-info h3 { font-size: 0.85em; margin-bottom: 4px; max-height: 2.2em; overflow: hidden; }
+    .search-info p { font-size: 0.65em; color: #aaa; margin-bottom: 6px; }
+    .search-info .buttons-container { display: flex; gap: 6px; }
+    .search-info button {
+      background-color: #ff0000;
+      border: none;
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7em;
+      color: #fff;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .search-info .download-progress {
+      margin-top: 6px;
+      display: none;
+    }
+    /* --- Elementos comunes para descarga --- */
+    .download-progress {
+      width: 90%;
+      margin: 8px auto 0;
+      display: none;
+    }
+    .download-progress progress {
+      width: 100%;
+      height: 8px;
+    }
+    /* Estilo para el spinner y el botón de cancelar dentro del botón de descarga */
+    .spinner {
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top: 2px solid #fff;
+      border-radius: 50%;
+      width: 12px;
+      height: 12px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .cancel-download-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 0.9em;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cancel-download-btn:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+    .three-dots {
+      font-size: 1.3em;
+      color: #aaa;
+      cursor: pointer;
+      z-index: 9999;
+    }
+    .menu-options {
+      display: none;
+      position: absolute;
+      top: 50px; right: 10px;
+      background-color: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      z-index: 99999;
+    }
+    .menu-options div {
+      padding: 8px 12px;
+      font-size: 0.85em;
+      border-bottom: 1px solid #444;
+      cursor: pointer;
+    }
+    .menu-options div:last-child { border-bottom: none; }
+    .menu-options div:hover { background-color: #444; }
+    /* --- BIBLIOTECA --- */
+    #biblioteca h2 { margin-bottom: 10px; font-size: 1.1em; }
+    .offline-list h3 { margin-bottom: 10px; font-size: 1em; }
+    .offline-container { display: flex; flex-direction: column; gap: 10px; }
+    .offline-item {
+      background-color: #1f1f1f;
+      border-radius: 6px;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      cursor: pointer;
+    }
+    .offline-left { display: flex; align-items: center; gap: 8px; }
+    .offline-left img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; }
+    .offline-info { flex: 1; }
+    .offline-info span { font-size: 0.85em; }
+    .offline-info p { font-size: 0.65em; color: #aaa; }
+    /* --- REPRODUCTOR --- */
+    .player-container {
+      position: fixed;
+      bottom: 60px;
+      left: 0;
+      right: 0;
+      background-color: #181818;
+      border-top: 1px solid #333;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      z-index: 2000;
+      display: none;
+    }
+    .player-thumb-container {
+      position: relative;
+      width: 50px;
+      height: 50px;
+      margin-right: 10px;
+    }
+    .player-thumb { width: 100%; height: 100%; border-radius: 4px; object-fit: cover; }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid #fff;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #player-thumb-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .player-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+    }
+    .player-title { font-size: 0.9em; margin-bottom: 5px; font-weight: bold; max-height: 2.4em; overflow: hidden; }
+    .player-controls { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      margin-bottom: 5px; 
+      flex-wrap: wrap; 
+    }
+    .control-btn {
+      background-color: transparent;
+      border: none;
+      cursor: pointer;
+      width: 30px; 
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      fill: #ff0000;
+      padding: 0;
+    }
+    .control-btn.active { 
+      background-color: rgba(255, 0, 0, 0.2); 
+      border-radius: 4px; 
+    }
+    .control-btn svg { width: 20px; height: 20px; }
+    .player-progress input[type="range"] { width: 100%; }
+    .player-time { font-size: 0.7em; color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <!-- Contenedor de Toasts -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- SECCIÓN PRINCIPAL -->
+  <div id="principal" class="section active">
+    <h2>MediaHub Music Player</h2>
+    <div class="search-bar">
+      <input type="text" id="principal-search-input" placeholder="Buscar canción...">
+      <button id="principal-search-button">Buscar</button>
+    </div>
+    <div class="grid-container" id="principal-grid"></div>
+  </div>
+
+  <!-- SECCIÓN BUSCAR -->
+  <div id="buscar" class="section">
+    <h2>MediaHub Music Search</h2>
+    <div class="search-bar">
+      <input type="text" id="buscar-search-input" placeholder="Buscar canción...">
+      <button id="buscar-search-button">Buscar</button>
+    </div>
+    <div class="search-list" id="buscar-list"></div>
+  </div>
+
+  <!-- SECCIÓN BIBLIOTECA -->
+  <div id="biblioteca" class="section">
+    <h2>MediaHub Music Offline</h2>
+    <div class="search-bar">
+      <input type="text" id="offline-search-input" placeholder="Buscar canciones descargadas...">
+    </div>
+    <div class="offline-list">
+      <h3>Mis canciones descargadas</h3>
+      <div class="offline-container" id="offline-container"></div>
+    </div>
+  </div>
+
+  <!-- REPRODUCTOR FIJO -->
+  <div class="player-container" id="player-container">
+    <div class="player-thumb-container">
+      <img id="player-thumb" class="player-thumb" src="" alt="Thumb">
+      <div id="player-thumb-spinner" class="spinner" style="display: none;"></div>
+    </div>
+    <div class="player-info">
+      <div class="player-title" id="player-title">Ninguna canción</div>
+      <div class="player-controls">
+        <button class="control-btn" id="shuffle-btn" title="Reproducción aleatoria">
+          <svg viewBox="0 0 24 24">
+            <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+          </svg>
+        </button>
+        <button class="control-btn" id="prev-btn" title="Anterior">
+          <svg viewBox="0 0 24 24">
+            <path d="M18 6l-8.5 6 8.5 6V6zM6 6h2v12H6z"/>
+          </svg>
+        </button>
+        <button class="control-btn" id="play-pause-btn" title="Reproducir/Pausar">
+          <svg id="play-icon" viewBox="0 0 24 24" style="display:none;">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg id="pause-icon" viewBox="0 0 24 24" style="display:none;">
+            <path d="M6 19h4V5H6M14 5v14h4V5h-4z"/>
+          </svg>
+        </button>
+        <button class="control-btn" id="next-btn" title="Siguiente">
+          <svg viewBox="0 0 24 24">
+            <path d="M6 18l8.5-6L6 6v12zm10-12v12h2V6h-2z"/>
+          </svg>
+        </button>
+        <button class="control-btn" id="repeat-btn" title="Repetir canción">
+          <svg viewBox="0 0 24 24">
+            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="player-progress">
+        <input type="range" id="progress-bar" value="0" min="0" max="100"/>
+      </div>
+      <div class="player-time">
+        <span id="current-time">0:00</span> / <span id="duration">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARRA DE NAVEGACIÓN INFERIOR -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-target="principal">
+      <img src="https://cdn-icons-png.flaticon.com/512/1946/1946433.png" alt="Principal">
+      <span>Principal</span>
+    </button>
+    <button class="nav-btn" data-target="buscar">
+      <img src="https://cdn-icons-png.flaticon.com/512/751/751381.png" alt="Buscar">
+      <span>Buscar</span>
+    </button>
+    <button class="nav-btn" data-target="biblioteca">
+      <img src="https://cdn-icons-png.flaticon.com/512/6464/6464493.png" alt="Biblioteca">
+      <span>Biblioteca</span>
+    </button>
+  </div>
+
+  <script>
+    // Registro del Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('Service Worker registrado', reg))
+        .catch(err => console.error('Error registrando SW', err));
+    }
+
+    // Función para sanitizar entradas de búsqueda
+    function sanitizeQuery(query) {
+      return query
+        .replace(/[<>[\]{}\\|]/g, "") // Elimina caracteres peligrosos
+        .trim()
+        .slice(0, 100); // Limita a 100 caracteres
+    }
+
+    // Función fetch con reintentos
+    async function fetchWithRetry(url, options = {}) {
+      let attempts = 0;
+      const maxAttempts = 3;
+      const timeout = options.timeout || 20000;
+      while (attempts < maxAttempts) {
+        try {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), timeout);
+          const response = await fetch(url, { ...options, signal: controller.signal });
+          clearTimeout(id);
+          if (!response.ok) throw new Error(`Respuesta de red no OK: ${response.status}`);
+          return response;
+        } catch (error) {
+          attempts++;
+          if (attempts >= maxAttempts) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+        }
+      }
+    }
+
+    // Función para descargar con 3 reintentos y espera de 25 seg solo si falla
+    async function fetchWithRetryDownload(url, abortController) {
+      let attempts = 0;
+      const maxAttempts = 3;
+      while (attempts < maxAttempts) {
+        try {
+          const timeout = 25000; // 25 segundos de timeout por intento
+          const response = await fetch(url, { signal: abortController.signal });
+          if (!response.ok) throw new Error(`Respuesta de red no OK: ${response.status}`);
+          return response;
+        } catch (error) {
+          if (error.name === 'AbortError') throw error; // Propagar error de aborto
+          attempts++;
+          if (attempts >= maxAttempts) throw error;
+          await new Promise(resolve => setTimeout(resolve, 25000));
+        }
+      }
+    }
+
+    // Función para descargar en blob con progreso
+    async function downloadAsBlob(url, onProgress, abortController) {
+      const response = await fetchWithRetry(url, { signal: abortController.signal });
+      if (!response.body) {
+        const blob = await response.blob();
+        if (onProgress) onProgress(1);
+        return blob;
+      }
+      const contentLengthHeader = response.headers.get("content-length");
+      let total = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+      let loaded = 0;
+      const reader = response.body.getReader();
+      const chunks = [];
+      let simulatedProgressInterval;
+      if (!total && onProgress) {
+        let simulatedProgress = 0.1;
+        onProgress(simulatedProgress);
+        simulatedProgressInterval = setInterval(() => {
+          simulatedProgress = Math.min(simulatedProgress + 0.05, 0.95);
+          onProgress(simulatedProgress);
+        }, 500);
+      }
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (total && onProgress) {
+          onProgress(loaded / total);
+        }
+      }
+      if (simulatedProgressInterval) {
+        clearInterval(simulatedProgressInterval);
+        onProgress(1);
+      }
+      return new Blob(chunks, { type: "audio/mpeg" });
+    }
+
+    // Variables globales
+    let db;
+    let audio = new Audio();
+    audio.autoplay = true;
+    audio.preload = "auto";
+    let playQueue = [];
+    let originalQueue = []; // Para shuffle
+    let currentIndex = -1;
+    let isPlaying = false;
+    let repeatMode = false; // Repetir una canción
+    let shuffleMode = false; // Reproducción aleatoria desactivada por defecto
+
+    // Elementos del reproductor y secciones
+    const playerContainer = document.getElementById("player-container");
+    const playerThumb = document.getElementById("player-thumb");
+    const playerTitle = document.getElementById("player-title");
+    const prevBtn = document.getElementById("prev-btn");
+    const playPauseBtn = document.getElementById("play-pause-btn");
+    const playIcon = document.getElementById("play-icon");
+    const pauseIcon = document.getElementById("pause-icon");
+    const nextBtn = document.getElementById("next-btn");
+    const shuffleBtn = document.getElementById("shuffle-btn");
+    const repeatBtn = document.getElementById("repeat-btn");
+    const progressBar = document.getElementById("progress-bar");
+    const currentTimeEl = document.getElementById("current-time");
+    const durationEl = document.getElementById("duration");
+
+    // Sección Principal
+    const principalSearchInput = document.getElementById("principal-search-input");
+    const principalSearchButton = document.getElementById("principal-search-button");
+    const principalGrid = document.getElementById("principal-grid");
+
+    // Sección Buscar
+    const buscarSearchInput = document.getElementById("buscar-search-input");
+    const buscarSearchButton = document.getElementById("buscar-search-button");
+    const buscarList = document.getElementById("buscar-list");
+
+    // Sección Biblioteca
+    const offlineSearchInput = document.getElementById("offline-search-input");
+    const offlineContainer = document.getElementById("offline-container");
+
+    // Contenedor de Toasts
+    const toastContainer = document.getElementById("toast-container");
+
+    // IndexedDB
+    const request = indexedDB.open("YTMusicDB", 2); // Incrementar versión para nuevo esquema
+    request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("songs")) {
+        const store = db.createObjectStore("songs", { keyPath: "videoId" });
+        store.createIndex("downloadTime", "downloadTime", { unique: false });
+      }
+    };
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      loadOfflineSongs();
+    };
+    request.onerror = (e) => {
+      console.error("Error al abrir IndexedDB:", e);
+      showToast("Error al acceder al almacenamiento local");
+    };
+
+    // Recuperar estado desde localStorage
+    window.addEventListener("DOMContentLoaded", () => {
+      const lastPrincipalQuery = localStorage.getItem("lastPrincipalQuery") || "";
+      principalSearchInput.value = lastPrincipalQuery;
+      const lastBuscarQuery = localStorage.getItem("lastBuscarQuery") || "";
+      buscarSearchInput.value = lastBuscarQuery;
+
+      const savedQueue = localStorage.getItem("playQueue");
+      const savedIndex = localStorage.getItem("currentIndex");
+      repeatMode = localStorage.getItem("repeatMode") === "true";
+      shuffleMode = localStorage.getItem("shuffleMode") === "true" ? true : false; // Garantizar false por defecto
+      updateControlButtons();
+      if (savedQueue) {
+        playQueue = JSON.parse(savedQueue);
+        originalQueue = [...playQueue];
+        currentIndex = parseInt(savedIndex, 10) || 0;
+        if (playQueue.length > 0 && currentIndex >= 0 && currentIndex < playQueue.length) {
+          loadAndPlayCurrent();
+        }
+      }
+    });
+
+    window.addEventListener("beforeunload", () => {
+      localStorage.setItem("lastPrincipalQuery", principalSearchInput.value.trim());
+      localStorage.setItem("lastBuscarQuery", buscarSearchInput.value.trim());
+      localStorage.setItem("playQueue", JSON.stringify(playQueue));
+      localStorage.setItem("currentIndex", currentIndex.toString());
+      localStorage.setItem("repeatMode", repeatMode.toString());
+      localStorage.setItem("shuffleMode", shuffleMode.toString());
+    });
+
+    // Navegación entre secciones
+    const navButtons = document.querySelectorAll(".nav-btn");
+    navButtons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        navButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const target = btn.getAttribute("data-target");
+        showSection(target);
+      });
+    });
+    function showSection(sectionId) {
+      document.querySelectorAll(".section").forEach(sec => { sec.classList.remove("active"); });
+      document.getElementById(sectionId).classList.add("active");
+    }
+
+    /* --- PRINCIPAL: Grid --- */
+    principalSearchButton.addEventListener("click", searchPrincipal);
+    principalSearchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchPrincipal(); });
+    async function searchPrincipal() {
+      const query = sanitizeQuery(principalSearchInput.value);
+      if (!query) {
+        showToast("Por favor, ingresa una búsqueda válida.");
+        return;
+      }
+      principalGrid.innerHTML = "<p style='grid-column:1/-1;'>Cargando...</p>";
+      try {
+        const url = `https://delirius-apiofc.vercel.app/search/ytsearch?q=${encodeURIComponent(query)}`;
+        const res = await fetchWithRetry(url);
+        const data = await res.json();
+        if (!data.status) throw new Error("Error en la búsqueda (delirius)");
+        displayPrincipalResults(data.data);
+      } catch (err) {
+        console.error(err);
+        principalGrid.innerHTML = "<p style='grid-column:1/-1;'>Error en la búsqueda.</p>";
+        showToast("Error al buscar canciones");
+      }
+    }
+    function displayPrincipalResults(results) {
+      principalGrid.innerHTML = "";
+      results.forEach((item, index) => {
+        const card = document.createElement("div");
+        card.classList.add("grid-card");
+        card.innerHTML = `
+          <img src="${item.thumbnail}" alt="${item.title}">
+          <div class="grid-info">
+            <h3>${item.title}</h3>
+            <p>${item.duration} | ${item.views.toLocaleString()} vistas</p>
+            <div class="buttons-container">
+              <button class="play-btn">Play</button>
+              <button class="download-btn">Descargar offline</button>
+            </div>
+          </div>
+          <div class="download-progress">
+            <progress value="0" max="100"></progress>
+          </div>
+          <div class="three-dots" style="display: none;">⋮</div>
+          <div class="menu-options">
+            <div class="save-to-phone">Guardar en Teléfono</div>
+            <div class="delete-offline">Borrar</div>
+          </div>
+        `;
+        const playBtn = card.querySelector(".play-btn");
+        playBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          buildQueueAndPlay(results, index, true);
+        });
+        const downloadBtn = card.querySelector(".download-btn");
+        let abortController = null; // Controlador para cancelar descarga
+        downloadBtn.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          // Si se hace clic en el botón de cancelar
+          if (ev.target.classList.contains("cancel-download-btn") && abortController) {
+            abortController.abort();
+            abortController = null;
+            const progressContainer = card.querySelector(".download-progress");
+            downloadBtn.innerHTML = "Descargar offline";
+            downloadBtn.style.display = "inline-block";
+            progressContainer.style.display = "none";
+            showToast("Descarga cancelada");
+            return;
+          }
+          const videoId = item.videoId;
+          const title = item.title;
+          const thumb = item.thumbnail;
+          const duration = item.duration;
+          const tx = db.transaction(["songs"], "readonly");
+          const store = tx.objectStore("songs");
+          const req = store.get(videoId);
+          req.onsuccess = async (e) => {
+            if (e.target.result) {
+              showToast("Ya descargaste esta canción");
+              return;
+            }
+            showToast("Descargando...");
+            try {
+              abortController = new AbortController();
+              // Mostrar spinner y luego reemplazar con botón de cancelar
+              downloadBtn.innerHTML = '<div class="spinner"></div>';
+              setTimeout(() => {
+                if (downloadBtn.innerHTML.includes('spinner')) {
+                  downloadBtn.innerHTML = '<button class="cancel-download-btn">✕</button>';
+                }
+              }, 1000); // Mostrar el botón de cancelar después de 1 segundo
+              const progressContainer = card.querySelector(".download-progress");
+              progressContainer.style.display = "block";
+              const progressBar = progressContainer.querySelector("progress");
+              const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${videoId}`;
+              const resApi = await fetchWithRetryDownload(apiUrl, abortController);
+              const jsonData = await resApi.json();
+              if (jsonData.status !== 200 || !jsonData.data || jsonData.data.length === 0) throw new Error("Error en la conversión");
+              let bestQualityObj = jsonData.data.reduce((prev, curr) => {
+                return parseInt(curr.quality) > parseInt(prev.quality) ? curr : prev;
+              });
+              const downloadUrl = bestQualityObj.downloadUrl;
+              const blob = await downloadAsBlob(downloadUrl, (percent) => {
+                progressBar.value = (percent * 100).toFixed(0);
+              }, abortController);
+              const coverResponse = await fetchWithRetry(thumb);
+              const coverBlob = await coverResponse.blob();
+              saveSongToDB({ videoId, title, thumbnail: thumb, blob, coverBlob, duration, downloadTime: Date.now() });
+              showToast("Descargada offline en la app");
+              downloadBtn.innerHTML = "Descargar offline";
+              downloadBtn.style.display = "none";
+              card.querySelector(".three-dots").style.display = "block";
+              progressContainer.style.display = "none";
+            } catch (err) {
+              if (err.name === 'AbortError') {
+                showToast("Descarga cancelada");
+                downloadBtn.innerHTML = "Descargar offline";
+                downloadBtn.style.display = "inline-block";
+                progressContainer.style.display = "none";
+              } else {
+                console.error(err);
+                showToast("Error al descargar la canción");
+                downloadBtn.innerHTML = "Descargar offline";
+                downloadBtn.style.display = "inline-block";
+                progressContainer.style.display = "none";
+              }
+            } finally {
+              abortController = null; // Asegurar que se limpie el controlador
+            }
+          };
+        });
+        const threeDots = card.querySelector(".three-dots");
+        const menuOptions = card.querySelector(".menu-options");
+        threeDots.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          menuOptions.style.display = (menuOptions.style.display === "block") ? "none" : "block";
+        });
+        const saveToPhone = card.querySelector(".save-to-phone");
+        const deleteOffline = card.querySelector(".delete-offline");
+        saveToPhone.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const videoId = item.videoId;
+          saveToPhoneOffline(videoId);
+          menuOptions.style.display = "none";
+        });
+        deleteOffline.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const videoId = item.videoId;
+          deleteSongOffline(videoId);
+          menuOptions.style.display = "none";
+        });
+        checkIfDownloaded(item.videoId, downloadBtn, threeDots);
+        principalGrid.appendChild(card);
+      });
+    }
+
+    /* --- BUSCAR: Reproducción y descarga offline --- */
+    buscarSearchButton.addEventListener("click", searchBuscar);
+    buscarSearchInput.addEventListener("keypress", (e) => { if (e.key === "Enter") searchBuscar(); });
+    async function searchBuscar() {
+      const query = sanitizeQuery(buscarSearchInput.value);
+      if (!query) {
+        showToast("Por favor, ingresa una búsqueda válida.");
+        return;
+      }
+      buscarList.innerHTML = "<p>Cargando...</p>";
+      try {
+        const url = `https://delirius-apiofc.vercel.app/search/searchtrack?q=${encodeURIComponent(query)}`;
+        const res = await fetchWithRetry(url);
+        const data = await res.json();
+        const tracks = data.map(item => ({
+          videoId: item.id,
+          thumbnail: item.image,
+          title: item.title,
+          duration: item.duration.label,
+          views: 0,
+          useStreamApi: true
+        }));
+        displayBuscarResults(tracks);
+      } catch (err) {
+        console.error(err);
+        buscarList.innerHTML = "<p>Error en la búsqueda.</p>";
+        showToast("Error al buscar canciones");
+      }
+    }
+    function displayBuscarResults(results) {
+      buscarList.innerHTML = "";
+      results.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.classList.add("search-item");
+        div.dataset.videoId = item.videoId;
+        div.innerHTML = `
+          <img src="${item.thumbnail}" alt="${item.title}">
+          <div class="search-info">
+            <h3>${item.title}</h3>
+            <p>${item.duration} | ${item.views.toLocaleString()} vistas</p>
+            <div class="buttons-container">
+              <button class="play-btn">Play</button>
+              <button class="download-btn">Descargar offline</button>
+            </div>
+            <div class="download-progress">
+              <progress value="0" max="100"></progress>
+            </div>
+          </div>
+          <div class="three-dots" style="display: none;">⋮</div>
+          <div class="menu-options">
+            <div class="save-to-phone">Guardar en Teléfono</div>
+            <div class="delete-offline">Borrar</div>
+          </div>
+        `;
+        const playBtn = div.querySelector(".play-btn");
+        playBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          buildQueueAndPlay(results, index, true);
+        });
+        const downloadBtn = div.querySelector(".download-btn");
+        let abortController = null; // Controlador para cancelar descarga
+        downloadBtn.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          // Si se hace clic en el botón de cancelar
+          if (ev.target.classList.contains("cancel-download-btn") && abortController) {
+            abortController.abort();
+            abortController = null;
+            const progressContainer = div.querySelector(".download-progress");
+            downloadBtn.innerHTML = "Descargar offline";
+            downloadBtn.style.display = "inline-block";
+            progressContainer.style.display = "none";
+            showToast("Descarga cancelada");
+            return;
+          }
+          const videoId = item.videoId;
+          const title = item.title;
+          const thumb = item.thumbnail;
+          const duration = item.duration;
+          const tx = db.transaction(["songs"], "readonly");
+          const store = tx.objectStore("songs");
+          const req = store.get(videoId);
+          req.onsuccess = async (e) => {
+            if (e.target.result) {
+              showToast("Ya descargaste esta canción");
+              return;
+            }
+            showToast("Descargando...");
+            try {
+              abortController = new AbortController();
+              // Mostrar spinner y luego reemplazar con botón de cancelar
+              downloadBtn.innerHTML = '<div class="spinner"></div>';
+              setTimeout(() => {
+                if (downloadBtn.innerHTML.includes('spinner')) {
+                  downloadBtn.innerHTML = '<button class="cancel-download-btn">✕</button>';
+                }
+              }, 1000); // Mostrar el botón de cancelar después de 1 segundo
+              const progressContainer = div.querySelector(".download-progress");
+              progressContainer.style.display = "block";
+              const progressBar = progressContainer.querySelector("progress");
+              const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${videoId}`;
+              const resApi = await fetchWithRetryDownload(apiUrl, abortController);
+              const jsonData = await resApi.json();
+              if (jsonData.status !== 200 || !jsonData.data || jsonData.data.length === 0) throw new Error("Error en la conversión");
+              let bestQualityObj = jsonData.data.reduce((prev, curr) => {
+                return parseInt(curr.quality) > parseInt(prev.quality) ? curr : prev;
+              });
+              const downloadUrl = bestQualityObj.downloadUrl;
+              const blob = await downloadAsBlob(downloadUrl, (percent) => {
+                progressBar.value = (percent * 100).toFixed(0);
+              }, abortController);
+              const coverResponse = await fetchWithRetry(thumb);
+              const coverBlob = await coverResponse.blob();
+              saveSongToDB({ videoId, title, thumbnail: thumb, blob, coverBlob, duration, downloadTime: Date.now() });
+              showToast("Descargada offline en la app");
+              downloadBtn.innerHTML = "Descargar offline";
+              downloadBtn.style.display = "none";
+              div.querySelector(".three-dots").style.display = "block";
+              progressContainer.style.display = "none";
+            } catch (err) {
+              if (err.name === 'AbortError') {
+                showToast("Descarga cancelada");
+                downloadBtn.innerHTML = "Descargar offline";
+                downloadBtn.style.display = "inline-block";
+                progressContainer.style.display = "none";
+              } else {
+                console.error(err);
+                showToast("Error al descargar la canción");
+                downloadBtn.innerHTML = "Descargar offline";
+                downloadBtn.style.display = "inline-block";
+                progressContainer.style.display = "none";
+              }
+            } finally {
+              abortController = null; // Asegurar que se limpie el controlador
+            }
+          };
+        });
+        const threeDots = div.querySelector(".three-dots");
+        const menuOptions = div.querySelector(".menu-options");
+        threeDots.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          menuOptions.style.display = (menuOptions.style.display === "block") ? "none" : "block";
+        });
+        const saveToPhone = div.querySelector(".save-to-phone");
+        const deleteOffline = div.querySelector(".delete-offline");
+        saveToPhone.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const videoId = item.videoId;
+          saveToPhoneOffline(videoId);
+          menuOptions.style.display = "none";
+        });
+        deleteOffline.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const videoId = item.videoId;
+          deleteSongOffline(videoId);
+          menuOptions.style.display = "none";
+        });
+        checkIfDownloaded(item.videoId, downloadBtn, threeDots);
+        buscarList.appendChild(div);
+      });
+    }
+    function checkIfDownloaded(videoId, downloadBtn, threeDots) {
+      const tx = db.transaction(["songs"], "readonly");
+      const store = tx.objectStore("songs");
+      const req = store.get(videoId);
+      req.onsuccess = (e) => {
+        if (e.target.result) {
+          downloadBtn.style.display = "none";
+          threeDots.style.display = "block";
+        } else {
+          downloadBtn.style.display = "inline-block";
+          threeDots.style.display = "none";
+        }
+      };
+    }
+    function deleteSongOffline(videoId) {
+      const tx = db.transaction(["songs"], "readwrite");
+      const store = tx.objectStore("songs");
+      store.delete(videoId);
+      tx.oncomplete = () => {
+        loadOfflineSongs();
+        showToast("Canción borrada");
+        const item = [...document.querySelectorAll(".search-item")].find(el => el.dataset.videoId === videoId);
+        if (item) {
+          const downloadBtn = item.querySelector(".download-btn");
+          const threeDots = item.querySelector(".three-dots");
+          if (downloadBtn) downloadBtn.style.display = "inline-block";
+          if (threeDots) threeDots.style.display = "none";
+        }
+      };
+    }
+    async function saveToPhoneOffline(videoId) {
+      const tx = db.transaction(["songs"], "readonly");
+      const store = tx.objectStore("songs");
+      const req = store.get(videoId);
+      req.onsuccess = (e) => {
+        const song = e.target.result;
+        if (!song || !song.blob) return;
+        const blobUrl = URL.createObjectURL(song.blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = song.title.replace(/[^a-zA-Z0-9]/g, "_") + ".mp3";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Canción guardada en tu teléfono");
+      };
+    }
+
+    /* --- Creación de cola y reproducción --- */
+    async function buildQueueAndPlay(list, startIndex, clearQueue = false) {
+      if (clearQueue) {
+        playQueue = [];
+        originalQueue = [];
+      }
+      // Verificar si las canciones están descargadas
+      for (const item of list) {
+        const song = await new Promise(resolve => {
+          const tx = db.transaction(["songs"], "readonly");
+          const store = tx.objectStore("songs");
+          const req = store.get(item.videoId);
+          req.onsuccess = (e) => resolve(e.target.result);
+          req.onerror = () => resolve(null);
+        });
+        playQueue.push({
+          videoId: item.videoId,
+          title: item.title,
+          thumbnail: song ? (song.coverBlob ? URL.createObjectURL(song.coverBlob) : song.thumbnail) : item.thumbnail,
+          audioUrl: song ? URL.createObjectURL(song.blob) : null,
+          duration: item.duration || song?.duration || "",
+          useStreamApi: !song // Usar API solo si no está descargada
+        });
+      }
+      originalQueue = [...playQueue];
+      if (shuffleMode) {
+        shuffleQueue();
+      }
+      currentIndex = startIndex;
+      loadAndPlayCurrent();
+    }
+
+    function shuffleQueue() {
+      // Mantener la canción actual en su posición
+      const currentTrack = playQueue[currentIndex];
+      const otherTracks = playQueue.filter((_, i) => i !== currentIndex);
+      // Algoritmo de Fisher-Yates
+      for (let i = otherTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+      }
+      // Reconstruir la cola con la canción actual en la posición original
+      playQueue = [...otherTracks.slice(0, currentIndex), currentTrack, ...otherTracks.slice(currentIndex)];
+    }
+
+    async function loadAndPlayCurrent() {
+      if (currentIndex < 0 || currentIndex >= playQueue.length) return;
+      const track = playQueue[currentIndex];
+
+      // Si es una canción offline (audioUrl es blob), reproducir directamente
+      if (track.audioUrl && track.audioUrl.startsWith("blob:")) {
+        startPlayback();
+        return;
+      }
+
+      // Verificar conexión a internet
+      if (!navigator.onLine) {
+        showToast("No hay conexión a internet");
+        if (currentIndex < playQueue.length - 1) {
+          currentIndex++;
+          loadAndPlayCurrent();
+        } else {
+          showToast("No hay más canciones disponibles offline");
+          playerContainer.style.display = "none";
+        }
+        return;
+      }
+
+      // Mostrar spinner mientras se carga el enlace
+      document.getElementById("player-thumb-spinner").style.display = "block";
+      try {
+        // Usar la API de Agatz para obtener el enlace de streaming
+        const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${track.videoId}`;
+        const resApi = await fetchWithRetry(apiUrl);
+        const jsonData = await resApi.json();
+        if (jsonData.status !== 200 || !jsonData.data || jsonData.data.length === 0) {
+          throw new Error("Error obteniendo enlace de streaming");
+        }
+
+        // Seleccionar el enlace de mejor calidad
+        let bestQualityObj = jsonData.data.reduce((prev, curr) => {
+          return parseInt(curr.quality) > parseInt(prev.quality) ? curr : prev;
+        });
+        track.audioUrl = bestQualityObj.downloadUrl;
+
+        document.getElementById("player-thumb-spinner").style.display = "none";
+        startPlayback();
+      } catch (err) {
+        document.getElementById("player-thumb-spinner").style.display = "none";
+        console.error("Error cargando stream:", err);
+        showToast("Error reproduciendo la canción, saltando a la siguiente");
+        if (currentIndex < playQueue.length - 1) {
+          currentIndex++;
+          loadAndPlayCurrent();
+        } else {
+          showToast("No hay más canciones en la cola");
+          playerContainer.style.display = "none";
+        }
+      }
+    }
+
+    function startPlayback() {
+      const track = playQueue[currentIndex];
+      if (!track.audioUrl) {
+        showToast("No se pudo cargar la canción");
+        return;
+      }
+
+      audio.src = track.audioUrl;
+      audio.load();
+      audio.play().catch(err => {
+        console.error("Error al reproducir:", err);
+        showToast("Error reproduciendo la canción, saltando a la siguiente");
+        if (currentIndex < playQueue.length - 1) {
+          currentIndex++;
+          loadAndPlayCurrent();
+        } else {
+          showToast("No hay más canciones en la cola");
+          playerContainer.style.display = "none";
+        }
+      });
+
+      playerThumb.src = track.thumbnail || "";
+      playerTitle.textContent = track.title || "Sin título";
+      playerContainer.style.display = "flex";
+      isPlaying = true;
+      updatePlayPauseIcon();
+      updateMediaSession(track);
+    }
+
+    function updateMediaSession(track) {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title,
+          artwork: [
+            { src: track.thumbnail, sizes: "96x96", type: "image/png" },
+            { src: track.thumbnail, sizes: "128x128", type: "image/png" },
+            { src: track.thumbnail, sizes: "192x192", type: "image/png" }
+          ]
+        });
+        navigator.mediaSession.setActionHandler('play', () => { audio.play(); });
+        navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          if (currentIndex > 0) { currentIndex--; loadAndPlayCurrent(); }
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          if (currentIndex < playQueue.length - 1) { currentIndex++; loadAndPlayCurrent(); }
+        });
+      }
+    }
+
+    audio.addEventListener("timeupdate", () => {
+      if (audio.duration) {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        progressBar.value = percent;
+        currentTimeEl.textContent = formatTime(audio.currentTime);
+        durationEl.textContent = formatTime(audio.duration);
+      }
+    });
+    progressBar.addEventListener("input", () => {
+      if (audio.duration) {
+        const seekTime = (progressBar.value / 100) * audio.duration;
+        audio.currentTime = seekTime;
+      }
+    });
+    audio.addEventListener("ended", () => {
+      progressBar.value = 0;
+      currentTimeEl.textContent = "0:00";
+      isPlaying = false;
+      updatePlayPauseIcon();
+      if (repeatMode) {
+        audio.currentTime = 0;
+        audio.play();
+        isPlaying = true;
+        updatePlayPauseIcon();
+      } else if (currentIndex < playQueue.length - 1) {
+        currentIndex++;
+        loadAndPlayCurrent();
+      } else {
+        showToast("Fin de la cola de reproducción");
+        playerContainer.style.display = "none";
+      }
+    });
+    prevBtn.addEventListener("click", () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        loadAndPlayCurrent();
+      }
+    });
+    nextBtn.addEventListener("click", () => {
+      if (currentIndex < playQueue.length - 1) {
+        currentIndex++;
+        loadAndPlayCurrent();
+      }
+    });
+    playPauseBtn.addEventListener("click", () => {
+      if (audio.paused) {
+        audio.play();
+        isPlaying = true;
+      } else {
+        audio.pause();
+        isPlaying = false;
+      }
+      updatePlayPauseIcon();
+    });
+    shuffleBtn.addEventListener("click", () => {
+      shuffleMode = !shuffleMode;
+      updateControlButtons();
+      if (shuffleMode) {
+        shuffleQueue();
+      } else {
+        // Restaurar orden original
+        const currentTrack = playQueue[currentIndex];
+        playQueue = [...originalQueue];
+        currentIndex = playQueue.findIndex(track => track.videoId === currentTrack.videoId);
+      }
+      showToast(shuffleMode ? "Reproducción aleatoria activada" : "Reproducción aleatoria desactivada");
+    });
+    repeatBtn.addEventListener("click", () => {
+      repeatMode = !repeatMode;
+      updateControlButtons();
+      audio.loop = repeatMode;
+      showToast(repeatMode ? "Repetición activada" : "Repetición desactivada");
+    });
+    audio.addEventListener("play", () => { isPlaying = true; updatePlayPauseIcon(); });
+    audio.addEventListener("pause", () => { isPlaying = false; updatePlayPauseIcon(); });
+    function updatePlayPauseIcon() {
+      if (isPlaying) {
+        pauseIcon.style.display = "block";
+        playIcon.style.display = "none";
+      } else {
+        pauseIcon.style.display = "none";
+        playIcon.style.display = "block";
+      }
+    }
+    function updateControlButtons() {
+      shuffleBtn.classList.toggle("active", shuffleMode);
+      repeatBtn.classList.toggle("active", repeatMode);
+    }
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? "0"+s : s}`;
+    }
+
+    /* --- BIBLIOTECA: Buscador de canciones descargadas --- */
+    offlineSearchInput.addEventListener("input", filterOfflineSongs);
+    function filterOfflineSongs() {
+      const query = sanitizeQuery(offlineSearchInput.value).toLowerCase();
+      loadOfflineSongs(query);
+    }
+    function loadOfflineSongs(filterQuery = "") {
+      if (!db) return;
+      offlineContainer.innerHTML = "<p>Cargando...</p>";
+      const tx = db.transaction(["songs"], "readonly");
+      const store = tx.objectStore("songs");
+      const req = store.index("downloadTime").openCursor(null, "prev"); // Ordenar por downloadTime descendente
+      const songs = [];
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          songs.push(cursor.value);
+          cursor.continue();
+        } else {
+          offlineContainer.innerHTML = "";
+          if (!songs || songs.length === 0) {
+            offlineContainer.innerHTML = "<p>No hay canciones descargadas.</p>";
+            return;
+          }
+          // Solo aplicar el filtro si filterQuery no es null o undefined
+          const filteredSongs = filterQuery !== null && filterQuery !== undefined
+            ? songs.filter(song => song.title.toLowerCase().includes(filterQuery))
+            : songs;
+          if (filteredSongs.length === 0) {
+            offlineContainer.innerHTML = "<p>No se encontraron canciones.</p>";
+            return;
+          }
+          filteredSongs.forEach(song => {
+            const coverUrl = song.coverBlob ? URL.createObjectURL(song.coverBlob) : song.thumbnail;
+            const div = document.createElement("div");
+            div.classList.add("offline-item");
+            div.onclick = (ev) => {
+              if (ev.target.classList.contains("three-dots") || ev.target.parentNode.classList.contains("menu-options")) { return; }
+              playOffline(song.videoId);
+            };
+            div.innerHTML = `
+              <div class="offline-left">
+                <img src="${coverUrl}" alt="${song.title}">
+                <div class="offline-info">
+                  <span>${song.title}</span>
+                  <p>${song.duration || "Desconocida"}</p>
+                </div>
+              </div>
+              <div class="three-dots" onclick="openMenu(event, '${song.videoId}')">⋮</div>
+              <div class="menu-options" id="menu-${song.videoId}">
+                <div onclick="deleteSong(event, '${song.videoId}')">Borrar</div>
+                <div onclick="saveToPhone(event, '${song.videoId}')">Guardar en Teléfono</div>
+              </div>
+            `;
+            offlineContainer.appendChild(div);
+          });
+        }
+      };
+      req.onerror = () => {
+        offlineContainer.innerHTML = "<p>Error al cargar canciones.</p>";
+        showToast("Error al cargar canciones descargadas");
+      };
+    }
+    function saveSongToDB(songData) {
+      const tx = db.transaction(["songs"], "readwrite");
+      const store = tx.objectStore("songs");
+      store.put(songData);
+      tx.oncomplete = () => {
+        loadOfflineSongs(null); // Pasar null para ignorar el filtro de búsqueda
+        updateBuscarDownloaded(songData.videoId);
+      };
+      tx.onerror = () => {
+        console.error("Error guardando la canción en IndexedDB.");
+        showToast("Error al guardar la canción");
+      };
+    }
+    function updateBuscarDownloaded(videoId) {
+      const item = [...document.querySelectorAll(".search-item")].find(el => el.dataset.videoId === videoId);
+      if (item) {
+        const downloadBtn = item.querySelector(".download-btn");
+        const threeDots = item.querySelector(".three-dots");
+        if (downloadBtn) downloadBtn.style.display = "none";
+        if (threeDots) threeDots.style.display = "block";
+      }
+    }
+    function playOffline(videoId) {
+      const tx = db.transaction(["songs"], "readonly");
+      const store = tx.objectStore("songs");
+      const req = store.getAll();
+      req.onsuccess = (e) => {
+        const songs = e.target.result;
+        if (!songs || songs.length === 0) return;
+        playQueue = songs.map(song => ({
+          videoId: song.videoId,
+          title: song.title,
+          thumbnail: song.coverBlob ? URL.createObjectURL(song.coverBlob) : song.thumbnail,
+          audioUrl: URL.createObjectURL(song.blob),
+          duration: song.duration || ""
+        }));
+        originalQueue = [...playQueue];
+        currentIndex = playQueue.findIndex(item => item.videoId === videoId);
+        if (currentIndex < 0) currentIndex = 0;
+        if (shuffleMode) {
+          shuffleQueue();
+        }
+        loadAndPlayCurrent();
+      };
+    }
+    window.openMenu = function(event, videoId) {
+      event.stopPropagation();
+      const menu = document.getElementById(`menu-${videoId}`);
+      menu.style.display = (menu.style.display === "block") ? "none" : "block";
+    };
+    window.deleteSong = function(event, videoId) {
+      event.stopPropagation();
+      const tx = db.transaction(["songs"], "readwrite");
+      const store = tx.objectStore("songs");
+      store.delete(videoId);
+      tx.oncomplete = () => {
+        loadOfflineSongs();
+        showToast("Canción borrada");
+        const item = [...document.querySelectorAll(".search-item")].find(el => el.dataset.videoId === videoId);
+        if (item) {
+          const downloadBtn = item.querySelector(".download-btn");
+          const threeDots = item.querySelector(".three-dots");
+          if (downloadBtn) downloadBtn.style.display = "inline-block";
+          if (threeDots) threeDots.style.display = "none";
+        }
+      };
+    };
+    window.saveToPhone = async function(event, videoId) {
+      event.stopPropagation();
+      const tx = db.transaction(["songs"], "readonly");
+      const store = tx.objectStore("songs");
+      const req = store.get(videoId);
+      req.onsuccess = (e) => {
+        const song = e.target.result;
+        if (!song || !song.blob) return;
+        const blobUrl = URL.createObjectURL(song.blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = song.title.replace(/[^a-zA-Z0-9]/g, "_") + ".mp3";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Canción guardada en tu teléfono");
+      };
+    };
+
+    function showToast(message) {
+      const toast = document.createElement("div");
+      toast.classList.add("toast");
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => { toast.remove(); }, 3500);
+    }
+  </script>
+</body>
+</html>
