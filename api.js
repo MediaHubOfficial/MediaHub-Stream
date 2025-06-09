@@ -161,16 +161,15 @@ async function loadAndPlayCurrent() {
   }
   document.getElementById("player-thumb-spinner").style.display = "block";
   try {
-    const apiUrl = `https://api.agatz.xyz/api/ytmp3?url=https://youtube.com/watch?v=${track.videoId}`;
-    const resApi = await fetchWithRetry(apiUrl);
+    const apiUrl = `https://ytdlpyton.nvlgroup.my.id/download/audio?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3D${track.videoId}&mode=Url`;
+    const resApi = await fetchWithRetry(apiUrl, {
+      headers: { 'accept': 'application/json' }
+    });
     const jsonData = await resApi.json();
-    if (jsonData.status !== 200 || !jsonData.data || jsonData.data.length === 0) {
+    if (jsonData.status !== "Success" || !jsonData.download_url) {
       throw new Error("Error obteniendo enlace de streaming");
     }
-    let bestQualityObj = jsonData.data.reduce((prev, curr) => {
-      return parseInt(curr.quality) > parseInt(prev.quality) ? curr : prev;
-    });
-    track.audioUrl = bestQualityObj.downloadUrl;
+    track.audioUrl = jsonData.download_url;
     document.getElementById("player-thumb-spinner").style.display = "none";
     startPlayback();
   } catch (err) {
